@@ -158,12 +158,14 @@ export declare type ListTemplateType = {
  * @property social       피드 정보 (Option)
  * @property buttons      버튼 배열 (Option)
  * @property buttonTitle  버튼이 하나일 때 버튼의 타이틀 (Option)
+ * @property user_id      유저 아이디
  */
 export declare type FeedTemplateType = {
   content: ContentType;
   social?: SocialType;
   buttons?: ButtonType[];
   buttonTitle?: String;
+  user_id: string;
 };
 
 /**

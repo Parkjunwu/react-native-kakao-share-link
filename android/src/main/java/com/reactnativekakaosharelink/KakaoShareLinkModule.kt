@@ -98,10 +98,9 @@ class KakaoShareLinkModule(private val reactContext: ReactApplicationContext) : 
     return Social(likeCount, commentCount, sharedCount, viewCount, subscriberCount)
   }
 
-  private fun sendWithTemplate(template: DefaultTemplate, promise: Promise) {
+  private fun sendWithTemplate(template: DefaultTemplate, user_id: String, promise: Promise) {
     val serverCallbackArgs = HashMap<String, String>()
-    serverCallbackArgs["user_id"] = "\${current_user_id}"
-    serverCallbackArgs["product_id"] = "\${shared_product_id}"
+    serverCallbackArgs["user_id"] = user_id
     if (ShareClient.instance.isKakaoTalkSharingAvailable(this.reactContext)) {
       ShareClient.instance.shareDefault(reactContext, template, serverCallbackArgs) { sharingResult, error ->
         if (error != null) {
@@ -139,28 +138,28 @@ class KakaoShareLinkModule(private val reactContext: ReactApplicationContext) : 
     }
   }
 
-  @ReactMethod
-  private fun sendCommerce(dict: ReadableMap, promise: Promise) {
-    val commerce = CommerceTemplate(
-      content = createContent(dict.getMap("content")!!),
-      commerce = createCommerce(dict.getMap("commerce")!!),
-      buttons = if (dict.hasKey("buttons")) createButtons(dict.getArray("buttons")!!) else null,
-      buttonTitle = getS(dict, "buttonTitle")
-    )
-    sendWithTemplate(commerce, promise)
-  }
-
-  @ReactMethod
-  private fun sendList(dict: ReadableMap, promise: Promise) {
-    val list = ListTemplate(
-      headerTitle = if (dict.hasKey("headerTitle")) dict.getString("headerTitle")!! else "",
-      headerLink = createLink(dict.getMap("headerLink")!!),
-      contents = createContents(dict.getArray("contents")!!),
-      buttons = if (dict.hasKey("buttons")) createButtons(dict.getArray("buttons")!!) else null,
-      buttonTitle = getS(dict, "buttonTitle")
-    )
-    sendWithTemplate(list, promise)
-  }
+//  @ReactMethod
+//  private fun sendCommerce(dict: ReadableMap, promise: Promise) {
+//    val commerce = CommerceTemplate(
+//      content = createContent(dict.getMap("content")!!),
+//      commerce = createCommerce(dict.getMap("commerce")!!),
+//      buttons = if (dict.hasKey("buttons")) createButtons(dict.getArray("buttons")!!) else null,
+//      buttonTitle = getS(dict, "buttonTitle")
+//    )
+//    sendWithTemplate(commerce, promise)
+//  }
+//
+//  @ReactMethod
+//  private fun sendList(dict: ReadableMap, promise: Promise) {
+//    val list = ListTemplate(
+//      headerTitle = if (dict.hasKey("headerTitle")) dict.getString("headerTitle")!! else "",
+//      headerLink = createLink(dict.getMap("headerLink")!!),
+//      contents = createContents(dict.getArray("contents")!!),
+//      buttons = if (dict.hasKey("buttons")) createButtons(dict.getArray("buttons")!!) else null,
+//      buttonTitle = getS(dict, "buttonTitle")
+//    )
+//    sendWithTemplate(list, promise)
+//  }
 
   @ReactMethod
   private fun sendFeed(dict: ReadableMap, promise: Promise) {
@@ -170,78 +169,79 @@ class KakaoShareLinkModule(private val reactContext: ReactApplicationContext) : 
       buttons = if (dict.hasKey("buttons")) createButtons(dict.getArray("buttons")!!) else null,
       buttonTitle = getS(dict, "buttonTitle")
     )
-    sendWithTemplate(feed, promise)
+    val user_id = getS(dict, "user_id")!!
+    sendWithTemplate(feed, user_id, promise)
   }
 
-  @ReactMethod
-  private fun sendLocation(dict: ReadableMap, promise: Promise) {
-    val location = LocationTemplate(
-      address = if (dict.hasKey("address")) dict.getString("address")!! else "",
-      addressTitle = if (dict.hasKey("addressTitle")) dict.getString("addressTitle")!! else null,
-      content = createContent(dict.getMap("content")!!),
-      social = if (dict.hasKey("social")) createSocial(dict.getMap("social")!!) else null,
-      buttons = if (dict.hasKey("buttons")) createButtons(dict.getArray("buttons")!!) else null,
-      buttonTitle = getS(dict, "buttonTitle")
-    )
-    sendWithTemplate(location, promise)
-  }
-
-  @ReactMethod
-  private fun sendText(dict: ReadableMap, promise: Promise) {
-    val text = TextTemplate(
-      text = if (dict.hasKey("text")) dict.getString("text")!! else "",
-      link = createLink(dict.getMap("link")!!),
-      buttons = if (dict.hasKey("buttons")) createButtons(dict.getArray("buttons")!!) else null,
-      buttonTitle = getS(dict, "buttonTitle")
-    )
-    sendWithTemplate(text, promise)
-  }
-
-  @ReactMethod
-  private fun sendCustom(dict: ReadableMap, promise: Promise) {
-    val templateId = if (dict.hasKey("templateId")) dict.getInt("templateId")!! else 0
-    val templateArgs = createExecutionParams(dict.getArray("templateArgs"))
-    val serverCallbackArgs = HashMap<String, String>()
-    serverCallbackArgs["user_id"] = "\${current_user_id}"
-    serverCallbackArgs["product_id"] = "\${shared_product_id}"
-
-    if (ShareClient.instance.isKakaoTalkSharingAvailable(reactContext)) {
-      ShareClient.instance.shareCustom(reactContext, templateId = templateId.toLong(), templateArgs = templateArgs, serverCallbackArgs = serverCallbackArgs) {
-        sharingResult, error ->
-        if (error != null) {
-          promise.reject("E_KAKAO_ERROR", error.message, error)
-          return@shareCustom
-        } else {
-          val map = Arguments.createMap()
-          map.putBoolean("result", true)
-          map.putString("intent", sharingResult?.intent.toString())
-          sharingResult?.intent?.let { intent -> reactContext.startActivity(intent, null) }
-          map.putString("warning", sharingResult?.warningMsg.toString())
-          map.putString("argument", sharingResult?.argumentMsg.toString())
-          map.putString("callback", serverCallbackArgs.toString())
-          promise.resolve(map)
-          return@shareCustom
-        }
-      }
-    } else {
-      // 카카오톡 미설치: 웹 공유 사용 권장
-      // 웹 공유 예시 코드
-      val sharerUrl = WebSharerClient.instance.makeCustomUrl(templateId.toLong(), templateArgs = templateArgs)
-
-      // 1. CustomTabs으로 Chrome 브라우저 열기
-      try {
-        reactContext.currentActivity?.let { KakaoCustomTabsClient.openWithDefault(it, sharerUrl) }
-      } catch (e: UnsupportedOperationException) {
-        // 2. CustomTabs으로 디바이스 기본 브라우저 열기
-        try {
-          reactContext.currentActivity?.let { KakaoCustomTabsClient.open(it, sharerUrl) }
-        } catch (e: ActivityNotFoundException) {
-          // 인터넷 브라우저가 없을 때 예외처리
-          promise.reject("E_KAKAO_NO_BROWSER", e.message, e)
-        }
-      }
-    }
-  }
+//  @ReactMethod
+//  private fun sendLocation(dict: ReadableMap, promise: Promise) {
+//    val location = LocationTemplate(
+//      address = if (dict.hasKey("address")) dict.getString("address")!! else "",
+//      addressTitle = if (dict.hasKey("addressTitle")) dict.getString("addressTitle")!! else null,
+//      content = createContent(dict.getMap("content")!!),
+//      social = if (dict.hasKey("social")) createSocial(dict.getMap("social")!!) else null,
+//      buttons = if (dict.hasKey("buttons")) createButtons(dict.getArray("buttons")!!) else null,
+//      buttonTitle = getS(dict, "buttonTitle")
+//    )
+//    sendWithTemplate(location, promise)
+//  }
+//
+//  @ReactMethod
+//  private fun sendText(dict: ReadableMap, promise: Promise) {
+//    val text = TextTemplate(
+//      text = if (dict.hasKey("text")) dict.getString("text")!! else "",
+//      link = createLink(dict.getMap("link")!!),
+//      buttons = if (dict.hasKey("buttons")) createButtons(dict.getArray("buttons")!!) else null,
+//      buttonTitle = getS(dict, "buttonTitle")
+//    )
+//    sendWithTemplate(text, promise)
+//  }
+//
+//  @ReactMethod
+//  private fun sendCustom(dict: ReadableMap, promise: Promise) {
+//    val templateId = if (dict.hasKey("templateId")) dict.getInt("templateId")!! else 0
+//    val templateArgs = createExecutionParams(dict.getArray("templateArgs"))
+//    val serverCallbackArgs = HashMap<String, String>()
+//    serverCallbackArgs["user_id"] = "\${current_user_id}"
+//    serverCallbackArgs["product_id"] = "\${shared_product_id}"
+//
+//    if (ShareClient.instance.isKakaoTalkSharingAvailable(reactContext)) {
+//      ShareClient.instance.shareCustom(reactContext, templateId = templateId.toLong(), templateArgs = templateArgs, serverCallbackArgs = serverCallbackArgs) {
+//        sharingResult, error ->
+//        if (error != null) {
+//          promise.reject("E_KAKAO_ERROR", error.message, error)
+//          return@shareCustom
+//        } else {
+//          val map = Arguments.createMap()
+//          map.putBoolean("result", true)
+//          map.putString("intent", sharingResult?.intent.toString())
+//          sharingResult?.intent?.let { intent -> reactContext.startActivity(intent, null) }
+//          map.putString("warning", sharingResult?.warningMsg.toString())
+//          map.putString("argument", sharingResult?.argumentMsg.toString())
+//          map.putString("callback", serverCallbackArgs.toString())
+//          promise.resolve(map)
+//          return@shareCustom
+//        }
+//      }
+//    } else {
+//      // 카카오톡 미설치: 웹 공유 사용 권장
+//      // 웹 공유 예시 코드
+//      val sharerUrl = WebSharerClient.instance.makeCustomUrl(templateId.toLong(), templateArgs = templateArgs)
+//
+//      // 1. CustomTabs으로 Chrome 브라우저 열기
+//      try {
+//        reactContext.currentActivity?.let { KakaoCustomTabsClient.openWithDefault(it, sharerUrl) }
+//      } catch (e: UnsupportedOperationException) {
+//        // 2. CustomTabs으로 디바이스 기본 브라우저 열기
+//        try {
+//          reactContext.currentActivity?.let { KakaoCustomTabsClient.open(it, sharerUrl) }
+//        } catch (e: ActivityNotFoundException) {
+//          // 인터넷 브라우저가 없을 때 예외처리
+//          promise.reject("E_KAKAO_NO_BROWSER", e.message, e)
+//        }
+//      }
+//    }
+//  }
 
   init {
     val kakaoAppKey = reactContext.resources.getString(
